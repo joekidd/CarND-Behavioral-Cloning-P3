@@ -1,118 +1,158 @@
-# Behaviorial Cloning Project
 
-[![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
+# Behavioral Cloning Project
 
-Overview
 ---
-This repository contains starting files for the Behavioral Cloning Project.
 
-In this project, you will use what you've learned about deep neural networks and convolutional neural networks to clone driving behavior. You will train, validate and test a model using Keras. The model will output a steering angle to an autonomous vehicle.
-
-We have provided a simulator where you can steer a car around a track for data collection. You'll use image data and steering angles to train a neural network and then use this model to drive the car autonomously around the track.
-
-We also want you to create a detailed writeup of the project. Check out the [writeup template](https://github.com/udacity/CarND-Behavioral-Cloning-P3/blob/master/writeup_template.md) for this project and use it as a starting point for creating your own writeup. The writeup can be either a markdown file or a pdf document.
-
-To meet specifications, the project will require submitting five files: 
-* model.py (script used to create and train the model)
-* drive.py (script to drive the car - feel free to modify this file)
-* model.h5 (a trained Keras model)
-* a report writeup file (either markdown or pdf)
-* video.mp4 (a video recording of your vehicle driving autonomously around the track for at least one full lap)
-
-This README file describes how to output the video in the "Details About Files In This Directory" section.
-
-Creating a Great Writeup
----
-A great writeup should include the [rubric points](https://review.udacity.com/#!/rubrics/432/view) as well as your description of how you addressed each point.  You should include a detailed description of the code used (with line-number references and code snippets where necessary), and links to other supporting documents or external references.  You should include images in your writeup to demonstrate how your code works with examples.  
-
-All that said, please be concise!  We're not looking for you to write a book here, just a brief description of how you passed each rubric point, and references to the relevant code :). 
-
-You're not required to use markdown for your writeup.  If you use another method please just submit a pdf of your writeup.
-
-The Project
----
 The goals / steps of this project are the following:
-* Use the simulator to collect data of good driving behavior 
-* Design, train and validate a model that predicts a steering angle from image data
-* Use the model to drive the vehicle autonomously around the first track in the simulator. The vehicle should remain on the road for an entire loop around the track.
-* Summarize the results with a written report
 
-### Dependencies
-This lab requires:
+- Use the simulator to collect data of good driving behavior
+- Build, a convolution neural network in Keras that predicts steering angles from images
+- Train and validate the model with a training and validation set
+- Test that the model successfully drives around track one without leaving the road
+- Summarize the results with a written report
 
-* [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit)
+### 1. Required files
 
-The lab enviroment can be created with CarND Term1 Starter Kit. Click [here](https://github.com/udacity/CarND-Term1-Starter-Kit/blob/master/README.md) for the details.
+- model.py: the implementation of the model architecture
+- preprocess.py: used for preprocessing and augmenting images before training process
+- drive.py: slightly modifed version of the original file (in order to preprocess the images)
+- model.h5: keras model
+- video_one.mp4: driving on track one
+- video_two.mp4: driving on track two
 
-The following resources can be found in this github repository:
-* drive.py
-* video.py
-* writeup_template.md
+### 2. Code
 
-The simulator can be downloaded from the classroom. In the classroom, we have also provided sample data that you can optionally use to help train your model.
+For easier experimenting the code was splitted into two files: model.py and preprocess.py. Thanks to that, preprocessing (including data augmentation) may happen separately from actual training. Once the preprocessing is done, the main focus may go to tuning hyperparameters of the model. Running the code is as simple as:
 
-## Details About Files In This Directory
 
-### `drive.py`
-
-Usage of `drive.py` requires you have saved the trained model as an h5 file, i.e. `model.h5`. See the [Keras documentation](https://keras.io/getting-started/faq/#how-can-i-save-a-keras-model) for how to create this file using the following command:
-```sh
-model.save(filepath)
+```python
+python preprocess.py # reads from data folder and generates x_train.npy, y_train.npy
+python model.py # executes the actual training and generated model.h5
 ```
 
-Once the model has been saved, it can be used with drive.py using this command:
+I used quite powerful machine for training (please see my <a href="https://www.tooploox.com/blog/deep-learning-with-gpu">blogpost</a> about it), so using generators wasn't quite necessary. However to meet requirements I implemented the code (see preprocess.py), I didn't use it (commented out), as it slows down the training process.
 
-```sh
-python drive.py model.h5
+The code of drive.py was also modified - the speed was increased, and the input to the model is now preprocessed.
+
+### 3. Model Architecture and Training Strategy
+
+##### 3.1 Architecture
+
+The architecture, which was used in this project, resambles the one from <a href="https://devblogs.nvidia.com/parallelforall/deep-learning-self-driving-cars/">Nvidia</a> (click the image below to enlarge). 
+
+<img src="https://raw.githubusercontent.com/joekidd/CarND-Behavioral-Cloning-P3/master/model.png" style="height: 500px"/>
+
+
+In order to improve learning performance and overall model accuracy <b>batch normalization was introduced to the above model</b>. There is also <b>elu non-linearity</b> used as activation function. Please refer to <a href="https://raw.githubusercontent.com/joekidd/CarND-Behavioral-Cloning-P3/master/complete_model.png">this file</a> to have a look at the complete architecture.
+
+The input for the network differs from the input generated by the simulator, therefore resizing to desired shape was required. It happens both in preprocess.py, where training data is resized, and in drive.py, where testing data is resized. Also a conversion from BGR (training), RGB (testing) to YUV was made, to follow Nvidia's paper. Each input is also normalized, in the following way:
+
+
+```python
+# x is the input image of input_shape
+model.add(Lambda(lambda x: (x / 127.5) - 1.0, input_shape=(66, 200, 3)))
 ```
 
-The above command will load the trained model and use the model to make predictions on individual images in real-time and send the predicted angle back to the server via a websocket connection.
+##### 3.2 Data collection
 
-Note: There is known local system's setting issue with replacing "," with "." when using drive.py. When this happens it can make predicted steering values clipped to max/min values. If this occurs, a known fix for this is to add "export LANG=en_US.utf8" to the bashrc file.
+In order to collect data for training set, the following strategy was applied:
+- drive 3 laps in the middle of the road clockwise
+- drive 3 laps in the middle of the road counter-clockwise
+- no extra recovery cations were recorder
 
-#### Saving a video of the autonomous agent
+This steps were repeated both for track one and track two.
 
-```sh
-python drive.py model.h5 run1
+<table>
+<tr>
+<td><img src="https://raw.githubusercontent.com/joekidd/CarND-Behavioral-Cloning-P3/master/examples/original.png"/></td>
+<td>Original image</td>
+</tr>
+<tr>
+<td><img src="https://raw.githubusercontent.com/joekidd/CarND-Behavioral-Cloning-P3/master/examples/cropped.png"/></td>
+<td>Region of interest</td>
+</tr>
+</table>
+
+Moreover, images coming from all 3 cameras was used, with a correction of 0.2 magnitude.
+
+<table>
+<tr>
+<td><img src="https://raw.githubusercontent.com/joekidd/CarND-Behavioral-Cloning-P3/master/examples/left.png"/></td>
+<td>Image from left camera (correction 0.2)</td>
+</tr>
+<tr>
+<td><img src="https://raw.githubusercontent.com/joekidd/CarND-Behavioral-Cloning-P3/master/examples/center.png"/></td>
+<td>Image from center camera</td>
+</tr>
+<tr>
+<td><img src="https://raw.githubusercontent.com/joekidd/CarND-Behavioral-Cloning-P3/master/examples/right.png"/></td>
+<td>Image from right camera (correction -0.2)</td>
+</tr>
+</table>
+
+##### 3.3 Data augmentation
+
+To make the training dataset more various, there were several augmentation strategies applied:
+- flip the image horizontally
+- adjust the brightness randomly
+- add shadow randomly
+- shift the horizon
+
+The first two approaches are self-explanatory. The third one, makes a rectangular part of the image darker, than the remaining part. The last one is not really necessary for the first track, but is quite beneficial in case of the second one - it allows to emulate up-hill/down-hill roads. 
+
+<table>
+<tr>
+<td><img src="https://raw.githubusercontent.com/joekidd/CarND-Behavioral-Cloning-P3/master/examples/flipped.png"/></td>
+<td>Flip horizontally</td>
+<td><img src="https://raw.githubusercontent.com/joekidd/CarND-Behavioral-Cloning-P3/master/examples/brightness.png"/></td>
+<td>Adjust brightness randomly</td>
+</tr>
+<tr>
+<td><img src="https://raw.githubusercontent.com/joekidd/CarND-Behavioral-Cloning-P3/master/examples/shadow.png"/></td>
+<td>Add shadow randomly</td>
+<td><img src="https://raw.githubusercontent.com/joekidd/CarND-Behavioral-Cloning-P3/master/examples/horizon.png"/></td>
+<td>Shift horizon</td>
+</tr>
+</table>
+
+
+All of the mentioned augmentation techniques are implemented in the preprocess.py file. The final preprocessing distribution looks as follows:
+
+<img src="https://raw.githubusercontent.com/joekidd/CarND-Behavioral-Cloning-P3/master/examples/t_distr.png"/>
+
+Most of the steering measurements are from the range(-0.25, 0.25), what might be easily explained by doing small corrections to the driving trajectory while driving. There is also more examples around -1 and 1, as they were generated by adding the correction value, while using images from left/right camera. In total, I managed to get <b>404892 examples</b>, that were created from just 12 full circuits made on both tracks.
+
+##### 3.4 Training strategy and avoiding overfitting
+
+The collected data was splitted into two parts: 60% was taken as a training set, 20% was left to be used for validation and the remaining 20% as a test set. Early stopping was implemented and the training process was stopped, when validation loss didn't improve within 3 epochs.
+
+In order to train the network, Adam optimizer was used with MSE as the loss function.
+
+Because <b>batch normalization was used, there was no need to use dropout, or strong l2 weight normalization</b>.
+
+### 4. Simulation
+
+There are video_*.mp4 files presenting the results of the trained models on both tracks. GIFs below link to youtube videos presenting whole circuits.
+
+##### 4.1 Track one
+<a href="https://youtu.be/9yHRG9Ir63M">
+<img src="https://github.com/joekidd/CarND-Behavioral-Cloning-P3/blob/master/examples/track_one.gif?raw=true"/>
+</a>
+
+##### 4.2 Challange
+<a href="https://youtu.be/Y4ETFuCkmOE">
+<img src="https://github.com/joekidd/CarND-Behavioral-Cloning-P3/blob/master/examples/challange.gif?raw=true"/>
+</a>  
+  
+### 5. Conclusions
+
+Having enough data is crucial in applications of deep learning methods. Even if the project contains only 2-tracks and the world in the simulator is way simpler than the real road conditions, there is still a need for having a good training set. Luckily, strong data augmentation methods come in help and allow to avoid long data collection process. Ultimately, I got numbers of various examples, which are hard to overfit to.
+
+Batch normalization is a good improvement of the architecture proposed by Nvidia and makes the model to converge faster. 
+
+As a further work I could try to train the network to predict not only steering commands, but also break and throttle.
+
+
+```python
+
 ```
-
-The fourth argument, `run1`, is the directory in which to save the images seen by the agent. If the directory already exists, it'll be overwritten.
-
-```sh
-ls run1
-
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_424.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_451.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_477.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_528.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_573.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_618.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_697.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_723.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_749.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_817.jpg
-...
-```
-
-The image file name is a timestamp of when the image was seen. This information is used by `video.py` to create a chronological video of the agent driving.
-
-### `video.py`
-
-```sh
-python video.py run1
-```
-
-Creates a video based on images found in the `run1` directory. The name of the video will be the name of the directory followed by `'.mp4'`, so, in this case the video will be `run1.mp4`.
-
-Optionally, one can specify the FPS (frames per second) of the video:
-
-```sh
-python video.py run1 --fps 48
-```
-
-Will run the video at 48 FPS. The default FPS is 60.
-
-#### Why create a video
-
-1. It's been noted the simulator might perform differently based on the hardware. So if your model drives succesfully on your machine it might not on another machine (your reviewer). Saving a video is a solid backup in case this happens.
-2. You could slightly alter the code in `drive.py` and/or `video.py` to create a video of what your model sees after the image is processed (may be helpful for debugging).
